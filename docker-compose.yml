@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: moex_postgres
+    environment:
+      POSTGRES_USER: moex_user
+      POSTGRES_PASSWORD: moex_pass
+      POSTGRES_DB: moex_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - moex_network
+
+  prefect-server:
+    image: prefecthq/prefect:2.14-python3.11
+    container_name: moex_prefect
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "4200:4200"
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+    networks:
+      - moex_network
+
+  dask-scheduler:
+    image: daskdev/dask:latest
+    container_name: moex_dask_scheduler
+    command: dask-scheduler
+    ports:
+      - "8786:8786"
+      - "8787:8787"
+    networks:
+      - moex_network
+
+  dask-worker:
+    image: daskdev/dask:latest
+    container_name: moex_dask_worker
+    command: dask-worker dask-scheduler:8786
+    depends_on:
+      - dask-scheduler
+    networks:
+      - moex_network
+    deploy:
+      replicas: 2
+
+  streamlit:
+    build: .
+    container_name: moex_streamlit
+    command: streamlit run dashboards/streamlit_app.py
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./dashboards:/app/dashboards
+    depends_on:
+      - postgres
+    networks:
+      - moex_network
+
+volumes:
+  postgres_data:
+
+networks:
+  moex_network:
+    driver: bridge
