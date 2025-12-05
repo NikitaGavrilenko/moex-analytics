@@ -15,17 +15,6 @@ services:
     networks:
       - moex_network
 
-  prefect-server:
-    image: prefecthq/prefect:2.14-python3.11
-    container_name: moex_prefect
-    command: prefect server start --host 0.0.0.0
-    ports:
-      - "4200:4200"
-    environment:
-      PREFECT_API_URL: http://prefect-server:4200/api
-    networks:
-      - moex_network
-
   dask-scheduler:
     image: daskdev/dask:latest
     container_name: moex_dask_scheduler
@@ -38,7 +27,6 @@ services:
 
   dask-worker:
     image: daskdev/dask:latest
-    container_name: moex_dask_worker
     command: dask-worker dask-scheduler:8786
     depends_on:
       - dask-scheduler
@@ -46,6 +34,34 @@ services:
       - moex_network
     deploy:
       replicas: 2
+
+  prefect-server:
+    image: prefecthq/prefect:2.14-python3.11
+    container_name: moex_prefect
+    command: prefect server start --host 0.0.0.0
+    ports:
+      - "4200:4200"
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+    networks:
+      - moex_network
+
+  app:
+    build: .
+    container_name: moex_app
+    volumes:
+      - ./data:/app/data
+      - ./flows:/app/flows
+      - ./dask_jobs:/app/dask_jobs
+      - ./dashboards:/app/dashboards
+    depends_on:
+      - postgres
+      - dask-scheduler
+    networks:
+      - moex_network
+    environment:
+      DATABASE_URL: postgresql://moex_user:moex_pass@postgres:5432/moex_db
+      DASK_SCHEDULER: dask-scheduler:8786
 
   streamlit:
     build: .
